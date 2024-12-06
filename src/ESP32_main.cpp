@@ -28,7 +28,7 @@ Adafruit_MAX31865 sensorCube = Adafruit_MAX31865(27);
 
 //int i=0;
 LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
-bool isAuto = true; // переключатель предыдущего режима работы  
+int sw = 1; // переключатель предыдущего режима работы  
 float temperatureTopColumn, temperatureCube, referentFlegmaTemperature, f_t3, flegmaTempDifference;
 
 void IRAM_ATTR valveClose(){ 
