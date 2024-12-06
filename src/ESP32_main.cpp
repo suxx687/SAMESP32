@@ -4,11 +4,11 @@
 #include <Adafruit_MAX31865.h>
 #include <LiquidCrystal_I2C.h>
  
-//jhjhjhjjjhj
+
 // use hardware SPI, just pass in the CS pin
 // Use software SPI:         CS, DI, DO, CLK
-Adafruit_MAX31865 max1 = Adafruit_MAX31865(26); //железный SPI
-Adafruit_MAX31865 max2 = Adafruit_MAX31865(27);
+Adafruit_MAX31865 sensorTopColumn = Adafruit_MAX31865(26); //железный SPI
+Adafruit_MAX31865 sensorCube = Adafruit_MAX31865(27);
 #define RREF1 428.998 //референсное сопротивление1
 #define RREF2 428.998 //референсное сопротивление2
 #define COLUMS           16   //LCD столбцы
@@ -28,47 +28,81 @@ Adafruit_MAX31865 max2 = Adafruit_MAX31865(27);
 
 //int i=0;
 LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
-int sw = 1; // переключатель предыдущего режима работы  
-float f_t1, f_t2, f_t1_ref, f_t3, f_t1_diff;
+bool isAuto = true; // переключатель предыдущего режима работы  
+float temperatureTopColumn, temperatureCube, referentFlegmaTemperature, f_t3, flegmaTempDifference;
 
-void IRAM_ATTR vlvClose(){ 
+void IRAM_ATTR valveClose(){ 
   digitalWrite (k1_pin, LOW);
   lcd.setCursor(8, 1);
   lcd.print("VC");  
 }
-void IRAM_ATTR vlvOpen(){
+void IRAM_ATTR valveOpen(){
   digitalWrite (k1_pin, HIGH);
   lcd.setCursor(8, 1);
   lcd.print("VO");  
 } 
-void IRAM_ATTR htrOff(){
+void IRAM_ATTR heaterOff(){
   digitalWrite (k2_pin, LOW);
   lcd.setCursor(11, 1);
   lcd.print("HOf");  
 }
-void IRAM_ATTR htrOn(){
+void IRAM_ATTR heaterOn(){
   digitalWrite (k2_pin, HIGH);
   lcd.setCursor(11, 1);
   lcd.print("HOn");  
 }
-void IRAM_ATTR hlOn(){
+void IRAM_ATTR AlarmLightOn(){
   digitalWrite(k3_pin, HIGH);
 }
-void IRAM_ATTR hlOff(){
+void IRAM_ATTR AlarmLightOff(){
   digitalWrite(k3_pin, LOW);
 }
-void IRAM_ATTR haOn(){
+void IRAM_ATTR AlarmSirenOn(){
   digitalWrite(k4_pin, HIGH);
 }
-void IRAM_ATTR haOff(){
+void IRAM_ATTR AlarmSirenOff(){
   digitalWrite(k4_pin, LOW);
+}
+
+void printTemperature(float temperatureTopColumn, float temperatureCube, float f_t3) {
+  lcd.setCursor(0, 0); 
+  lcd.print("T1="); 
+  lcd.printf("%.1f ", temperatureTopColumn); 
+  lcd.setCursor(8, 0); 
+  lcd.print("T2="); 
+  lcd.printf("%.1f ", temperatureCube);
+  lcd.setCursor(11, 1); 
+  lcd.print("T3="); 
+  lcd.printf("%.1f ",f_t3);  
+}
+
+
+void armageddonScenario(float temperatureTopColumn, float temperatureCube, float f_t3) {
+  if (temperatureTopColumn > 80 || temperatureCube > 94.8) {
+    heaterOff();
+    valveClose();
+  } 
+
+  if (temperatureTopColumn > 79 || temperatureCube > 93.8) {
+    AlarmSirenOn();
+    AlarmLightOn();
+  } 
+
+  if (f_t3 > 51) {
+    AlarmSirenOn();
+    AlarmLightOn();
+  }
+
+  if (f_t3 > 56) {
+    heaterOff();
+  } 
 }
 
 void setup() {
   Serial.begin(115200); //инициализация порта
   Serial.println("StartUp");
-  max1.begin(MAX31865_3WIRE);  // инициализация T1
-  max2.begin(MAX31865_3WIRE); // инициализация T2
+  sensorTopColumn.begin(MAX31865_3WIRE);  // инициализация T1
+  sensorCube.begin(MAX31865_3WIRE); // инициализация T2
   while (lcd.begin(COLUMS, ROWS, LCD_5x8DOTS) != 1) //colums, rows, characters size, SDA, SCL, I2C speed in Hz, I2C stretch time in usec 
   {
     Serial.println(F("16*2LCD is not connected or lcd pins declaration is wrong. Only pins numbers: 4,5,6,16,11,12,13,14 are legal."));
@@ -79,99 +113,69 @@ void setup() {
   delay(2000);
 
   lcd.clear();
-  max1.begin(MAX31865_3WIRE);  // инициализация вторичника 1
-  max2.begin(MAX31865_3WIRE); // инициализация вторичника 2
+  sensorTopColumn.begin(MAX31865_3WIRE);  // инициализация вторичника 1
+  sensorCube.begin(MAX31865_3WIRE); // инициализация вторичника 2
   pinMode(sb1_pin, INPUT); 
   pinMode(hs1_pin, INPUT); pinMode(hs3_pin, INPUT); // Ext_PUp 
   pinMode(hs2_pin, INPUT); pinMode(hs4_pin, INPUT); // Ext_PUp 
   pinMode(k1_pin, OUTPUT); pinMode(k2_pin, OUTPUT); 
   pinMode(k3_pin, OUTPUT); pinMode(k4_pin, OUTPUT);
-  attachInterrupt(hs1_pin, vlvOpen, FALLING);   attachInterrupt(hs2_pin, vlvClose, FALLING); //аппаратное прерывание
-  attachInterrupt(hs3_pin, htrOn, FALLING);     attachInterrupt(hs4_pin, htrOff, FALLING);
+  attachInterrupt(hs1_pin, valveOpen, FALLING);   attachInterrupt(hs2_pin, valveClose, FALLING); //аппаратное прерывание
+  attachInterrupt(hs3_pin, heaterOn, FALLING);     attachInterrupt(hs4_pin, heaterOff, FALLING);
 
  
 }
 
 void loop() {
-  switch (digitalRead(sb1_pin))
-      {
+  temperatureTopColumn = sensorTopColumn.temperature(100, RREF1); //верх колонны
+  temperatureCube = sensorCube.temperature(100, RREF2); // куб
+  f_t3 = random(0, 99.9); //рандом, далее вода на ВЫХОДЕ
+
+  switch (digitalRead(sb1_pin)) {
     case  HIGH: //ручной режим
-        if (sw == 0) { 
+      if (sw == 0) { 
         lcd.clear();
         sw = 1;
-        vlvClose();
-        htrOff();
+        valveClose();
+        heaterOff();
         lcd.setCursor(15, 1);
         lcd.print("M");  
         Serial.println("Set to manual");
-        }
-        
-      f_t1 = max1.temperature(100,RREF1); //верх колонны
-      f_t2 = max2.temperature(100,RREF2); // куб
-      f_t3 = random(0, 99.9); //рандом, далее вода на ВЫХОДЕ
+      }
       
-      lcd.setCursor(0, 0); lcd.print("T1="); lcd.printf("%.1f ",f_t1); lcd.setCursor(8, 0); lcd.print("T2="); lcd.printf("%.1f ",f_t2); 
-      lcd.setCursor(11, 1); lcd.print("T3="); lcd.printf("%.1f ",f_t3);
-      if (f_t1>80 || f_t2>94.8) {
-        htrOff();
-        vlvClose();
-      } 
-      if (f_t1>79 || f_t2>93.8) {
-        haOn();
-        hlOn();
-      } 
-      if (f_t3>51) {
-        haOn();
-        hlOn();
-      }
-      if (f_t3>56) {
-        htrOff();
-      }
+      printTemperature(temperatureTopColumn, temperatureCube, f_t3);
+      armageddonScenario(temperatureTopColumn, temperatureCube, f_t3);
+
       break;                //конец ручного режима
 
-     case LOW:              // авто режим
-   if (sw == 1) {
-  f_t1_ref = max1.temperature(100,RREF1);
+    case LOW:              // авто режим
+      if (sw == 1) {
+        referentFlegmaTemperature = sensorTopColumn.temperature(100,RREF1);
 
-  lcd.clear();
-  lcd.setCursor(15, 1);
-  lcd.print("A");
-  sw = 0;
-   }
-   f_t1 = max1.temperature(100,RREF1); //верх колонны
-     f_t2 = max2.temperature(100,RREF2); // куб
-      f_t3 = random(0, 99.9); //рандом, далее вода на ВЫХОДЕ
- lcd.setCursor(0, 0); lcd.print("T1="); lcd.printf("%.1f ",f_t1); lcd.setCursor(8, 0); lcd.print("T2="); lcd.printf("%.1f ",f_t2); 
- lcd.setCursor(11, 1); lcd.print("T3="); lcd.printf("%.1f ",f_t3);   
-
-f_t1_diff = abs(f_t1_ref-f_t1); // разница текущей и фиксированной т в колонне по модулю
-  if (f_t1_diff>0.1) {   // если разница между фикс и текущей более 0,1град то включаем сигнализацию
-    haOn();
-    hlOn();
-  }
-  else {                // иначе выключаем
-    haOff();
-    hlOff();
-  }
-  if (f_t1_diff>0.2) {   // если разница более 0,2 то закрываем клапан
-    vlvClose();} else if (f_t1_diff<0.1) { // если уменьшилась до 0,1 - открываем клапан
-      vlvOpen();
-    }
-   if (f_t1>80 || f_t2>94.8) {
-        htrOff();
-        vlvClose();
-      } 
-      if (f_t1>79 || f_t2>93.8) {
-        haOn();
-        hlOn();
-      } 
-      if (f_t3>51) {
-        haOn();
-        hlOn();
+        lcd.clear();
+        lcd.setCursor(15, 1);
+        lcd.print("A");
+        sw = 0;
       }
-      if (f_t3>56) {
-        htrOff();
-      }  
+      printTemperature(temperatureTopColumn, temperatureCube, f_t3);
+
+      flegmaTempDifference = abs(referentFlegmaTemperature - temperatureTopColumn); // разница текущей и фиксированной т в колонне по модулю
+      
+      if (flegmaTempDifference > 0.1) {   // если разница между фикс и текущей более 0,1град то включаем сигнализацию
+        AlarmSirenOn();
+        AlarmLightOn();
+      } else {                // иначе выключаем
+        AlarmSirenOff();
+        AlarmLightOff();
+      }
+
+      if (flegmaTempDifference > 0.2) {   // если разница более 0,2 то закрываем клапан
+        valveClose();
+      } else if (flegmaTempDifference < 0.1) { // если уменьшилась до 0,1 - открываем клапан
+        valveOpen();
+      }
+
+      armageddonScenario(temperatureTopColumn, temperatureCube, f_t3);
 
 /*
   uint16_t rtd = max1.readRTD();//delay(2000);
