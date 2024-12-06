@@ -4,7 +4,7 @@
 #include <Adafruit_MAX31865.h>
 #include <LiquidCrystal_I2C.h>
  
-
+//jhjhjhjjjhj
 // use hardware SPI, just pass in the CS pin
 // Use software SPI:         CS, DI, DO, CLK
 Adafruit_MAX31865 max1 = Adafruit_MAX31865(26); //железный SPI
