@@ -32,36 +32,36 @@ int sw = 1; // переключатель предыдущего режима р
 float temperatureTopColumn, temperatureCube, referentFlegmaTemperature, f_t3, flegmaTempDifference;
 
 void IRAM_ATTR valveClose(){ 
-  digitalWrite (k1_pin, LOW);
+  digitalWrite (k1_pin, HIGH);
   lcd.setCursor(8, 1);
   lcd.print("VC");  
 }
 void IRAM_ATTR valveOpen(){
-  digitalWrite (k1_pin, HIGH);
+  digitalWrite (k1_pin, LOW);
   lcd.setCursor(8, 1);
   lcd.print("VO");  
 } 
 void IRAM_ATTR heaterOff(){
-  digitalWrite (k2_pin, LOW);
+  digitalWrite (k2_pin, HIGH);
   lcd.setCursor(11, 1);
   lcd.print("HOf");  
 }
 void IRAM_ATTR heaterOn(){
-  digitalWrite (k2_pin, HIGH);
+  digitalWrite (k2_pin, LOW);
   lcd.setCursor(11, 1);
   lcd.print("HOn");  
 }
 void IRAM_ATTR AlarmLightOn(){
-  digitalWrite(k3_pin, HIGH);
-}
-void IRAM_ATTR AlarmLightOff(){
   digitalWrite(k3_pin, LOW);
 }
+void IRAM_ATTR AlarmLightOff(){
+  digitalWrite(k3_pin, HIGH);
+}
 void IRAM_ATTR AlarmSirenOn(){
-  digitalWrite(k4_pin, HIGH);
+  digitalWrite(k4_pin, LOW);
 }
 void IRAM_ATTR AlarmSirenOff(){
-  digitalWrite(k4_pin, LOW);
+  digitalWrite(k4_pin, HIGH);
 }
 
 void printTemperature(float temperatureTopColumn, float temperatureCube, float f_t3) {
